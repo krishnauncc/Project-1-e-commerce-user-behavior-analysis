@@ -11,6 +11,8 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import com.ecommerce.tasks.Task1.MostEngagedUsersCombiner;
 import com.ecommerce.tasks.Task1.MostEngagedUsersMapper;
 import com.ecommerce.tasks.Task1.MostEngagedUsersReducer;
+import com.ecommerce.tasks.Task3.PurchasingBehaviorMapper;
+import com.ecommerce.tasks.Task3.PurchasingBehaviorReducer;
 
 public class Driver {
     public static void main(String[] args) throws Exception {
@@ -28,6 +30,26 @@ public class Driver {
         FileInputFormat.addInputPath(job, new Path(args[1]));
         FileOutputFormat.setOutputPath(job, new Path(args[2]));
 
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+        // Wait for Task 1 to complete before starting Task 3
+        if (!job.waitForCompletion(true)) {
+            System.exit(1);
+        }
+
+        // Task 3
+        Configuration conf3 = new Configuration();
+        Job job3 = Job.getInstance(conf3, "User Purchasing Behavior");
+
+        job3.setJarByClass(Driver.class);
+        job3.setMapperClass(PurchasingBehaviorMapper.class);
+        job3.setReducerClass(PurchasingBehaviorReducer.class);
+
+        job3.setOutputKeyClass(Text.class);
+        job3.setOutputValueClass(IntWritable.class);
+
+        FileInputFormat.addInputPath(job3, new Path(args[3])); // Input path for Task 3 (e.g., transactions.csv)
+        FileOutputFormat.setOutputPath(job3, new Path(args[4])); // Output path for Task 3
+
+        System.exit(job3.waitForCompletion(true) ? 0 : 1);
+
     }
 }
