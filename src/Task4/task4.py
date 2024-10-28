@@ -6,10 +6,10 @@ class ProductRevenueAnalysis(MRJob):
 
     def configure_args(self):
         super(ProductRevenueAnalysis, self).configure_args()
-        self.add_file_arg('--products')
+        self.add_file_arg('--products')  # Add products.csv as an additional file
 
     def mapper_init(self):
-        # Read the product information into a dictionary
+        # Load product data from the CSV file into a dictionary
         self.products = {}
         with open(self.options.products, 'r') as f:
             reader = csv.DictReader(f)
@@ -24,7 +24,7 @@ class ProductRevenueAnalysis(MRJob):
         # Parse each transaction row
         fields = line.split(',')
         if fields[0] == "TransactionID":
-            return  # skip header row
+            return  # Skip the header row in transactions.csv
 
         product_id = fields[3]
         revenue_generated = float(fields[5])
@@ -35,7 +35,7 @@ class ProductRevenueAnalysis(MRJob):
             yield product_id, (product_info['ProductCategory'], product_info['ProductName'], revenue_generated)
 
     def reducer_total_revenue(self, product_id, values):
-        # Aggregate total revenue per product
+        # Aggregate the total revenue for each product
         total_revenue = 0
         product_category = None
         product_name = None
@@ -45,45 +45,31 @@ class ProductRevenueAnalysis(MRJob):
             product_name = value[1]
             total_revenue += value[2]
 
-        # Emit total revenue per product for further processing
-        yield product_id, {
-            'ProductCategory': product_category,
-            'ProductName': product_name,
-            'TotalRevenue': total_revenue
-        }
-
+        # Emit total revenue and product details for further processing
         yield product_category, (product_name, product_id, total_revenue)
-    
-    def reducer_average_and_top_products(self, key, values):
-        if isinstance(key, str) and key.isnumeric():
-            # Product-level output: return as is for each product's total revenue
-            for value in values:
-                product_info = value
-                # Add 'AverageRevenue' which here is same as total revenue for each product
-                product_info['AverageRevenue'] = product_info['TotalRevenue']
-                yield key, product_info
-        else:
-            # Calculate average revenue and identify top 3 products per category
-            products = []
-            total_revenue = 0
-            count = 0
 
-            for value in values:
-                product_name, product_id, revenue = value
-                products.append((product_name, product_id, revenue))
-                total_revenue += revenue
-                count += 1
+    def reducer_average_and_top_products(self, category, values):
+        # Calculate average revenue and identify top 3 products for each category
+        products = []
+        total_revenue = 0
+        count = 0
 
-            average_revenue = total_revenue / count if count > 0 else 0
+        for value in values:
+            product_name, product_id, revenue = value
+            products.append((product_name, product_id, revenue))
+            total_revenue += revenue
+            count += 1
 
-            # Sort products by revenue and get the top 3
-            top_products = sorted(products, key=lambda x: x[2], reverse=True)[:3]
+        average_revenue = total_revenue / count if count > 0 else 0
 
-            # Yield category-level results
-            yield key, {
-                'AverageRevenue': average_revenue,
-                'Top3Products': top_products
-            }
+        # Sort products by revenue in descending order to find the top 3
+        top_products = sorted(products, key=lambda x: x[2], reverse=True)[:3]
+
+        # Yield category-level results
+        yield category, {
+            'AverageRevenue': average_revenue,
+            'Top3Products': top_products
+        }
 
     def steps(self):
         return [
@@ -93,5 +79,5 @@ class ProductRevenueAnalysis(MRJob):
             MRStep(reducer=self.reducer_average_and_top_products)
         ]
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     ProductRevenueAnalysis.run()
